@@ -75,6 +75,18 @@
             transform: scale(1.2);
             color: var(--traffic-yellow);
         }
+        #spreadsheet-preview table { border-collapse: separate; border-spacing: 0; }
+        #spreadsheet-preview td {
+            border: 1px solid var(--light-grey);
+            transition: background-color 0.2s;
+            cursor: pointer;
+            min-width: 100px;
+            padding: 0.5rem;
+        }
+        #spreadsheet-preview td:hover { background-color: #ca8a04; }
+        .selected-region { background-color: #be123c !important; color: white; }
+        .selected-category { background-color: #1d4ed8 !important; color: white; }
+        .selected-column { background-color: #047857 !important; color: white; }
     </style>
 </head>
 <body class="text-gray-200">
@@ -115,6 +127,17 @@
                     <button id="btn-save-template" class="btn btn-primary">Save Template</button>
                 </div>
                  <button id="btn-back-to-list" class="hover:underline mt-4" style="color: var(--traffic-yellow);">&larr; Back to Templates</button>
+            </div>
+
+            <!-- Excel Mapper View -->
+            <div id="view-mapper" class="hidden card p-6 sm:p-8 space-y-6">
+                 <h2 id="mapper-title" class="text-2xl font-bold" style="color: var(--traffic-yellow);">Map Your Excel Template</h2>
+                 <p id="mapper-instructions" class="text-gray-400">First, click on the cells in the preview that represent your main REGIONS.</p>
+                 <div id="spreadsheet-preview" class="w-full overflow-x-auto bg-gray-900 p-2 rounded-lg"></div>
+                 <div class="flex justify-end gap-4 pt-4">
+                     <button id="btn-mapper-back" class="hover:underline" style="color: var(--traffic-yellow);">&larr; Back</button>
+                     <button id="btn-mapper-confirm" class="btn btn-primary">Confirm Regions</button>
+                 </div>
             </div>
             
             <!-- Data Entry View -->
@@ -159,16 +182,23 @@
                 templates: document.getElementById('view-templates'),
                 editor: document.getElementById('view-editor'),
                 filler: document.getElementById('view-filler'),
+                mapper: document.getElementById('view-mapper'),
             };
             // Main buttons
             document.getElementById('btn-new-template').addEventListener('click', () => this.showEditor());
-            document.getElementById('btn-import-template').addEventListener('click', () => alert('Import feature is in development. Please use "Create From Scratch".'));
+            document.getElementById('btn-import-template').addEventListener('click', () => document.getElementById('import-file-input').click());
+            document.getElementById('import-file-input').addEventListener('change', (e) => this.startMapper(e.target.files[0]));
 
             // Editor buttons
             document.getElementById('btn-add-section').addEventListener('click', () => this.addSection());
             document.getElementById('btn-duplicate-last-section').addEventListener('click', () => this.duplicateLastSection());
             document.getElementById('btn-save-template').addEventListener('click', () => this.saveTemplate());
             document.getElementById('btn-back-to-list').addEventListener('click', () => this.showTemplatesView());
+
+            // Mapper buttons
+            document.getElementById('btn-mapper-back').addEventListener('click', () => this.showTemplatesView());
+            document.getElementById('btn-mapper-confirm').addEventListener('click', () => this.handleMapperConfirm());
+            document.getElementById('spreadsheet-preview').addEventListener('click', (e) => this.handleMapperCellClick(e));
 
             // Filler buttons
             document.getElementById('btn-filler-back').addEventListener('click', () => this.showTemplatesView());
@@ -218,7 +248,7 @@
                 card.innerHTML = `
                     <div>
                         <h3 class="font-bold text-lg text-white truncate">${template.name}</h3>
-                        <p class="text-sm text-gray-400">${Object.keys(template.sections).length} section(s)</p>
+                        <p class="text-sm text-gray-400">${template.isMapped ? 'Mapped Excel Template' : 'Created From Scratch'}</p>
                     </div>
                     <div class="flex justify-end gap-2 mt-4">
                         <button class="btn-edit btn bg-gray-600 hover:bg-gray-500 text-sm py-1 px-3 rounded-md" data-id="${id}">Edit</button>
@@ -240,6 +270,11 @@
 
             if (isEditing) {
                 const template = this.templates[this.editingTemplateId];
+                if(template.isMapped) {
+                    alert("Editing mapped templates is not supported. Please create a new one from scratch if you need to make changes.");
+                    this.showTemplatesView();
+                    return;
+                }
                 templateNameInput.value = template.name;
                 Object.keys(template.sections).forEach(id => this.addSection(id, template.sections[id]));
             } else {
@@ -311,7 +346,7 @@
             const name = document.getElementById('template-name-input').value.trim();
             if (!name) return alert('Please enter a template name.');
             
-            const template = { id, name, sections: {} };
+            const template = { id, name, isMapped: false, sections: {} };
             document.querySelectorAll('#sections-container > div').forEach(sectionDiv => {
                 const sectionId = sectionDiv.dataset.sectionId;
                 const sectionName = sectionDiv.querySelector('.section-name-input').value.trim();
@@ -328,6 +363,101 @@
             this.saveToStorage('templates', this.templates);
             this.showTemplatesView();
         }
+
+        async startMapper(file) {
+            if (!file) return;
+            this.resetMappingState();
+            const data = await file.arrayBuffer();
+            this.mappingState.originalWorkbook = XLSX.read(data);
+            const ws = this.mappingState.originalWorkbook.Sheets[this.mappingState.originalWorkbook.SheetNames[0]];
+            this.mappingState.originalSheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+            this.renderSpreadsheetPreview();
+            this.switchView('mapper');
+        }
+
+        renderSpreadsheetPreview() {
+            const previewContainer = document.getElementById('spreadsheet-preview');
+            const table = document.createElement('table');
+            this.mappingState.originalSheetData.slice(0, 40).forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                row.forEach((cell, colIndex) => {
+                    const td = document.createElement('td');
+                    td.textContent = cell || '';
+                    td.dataset.row = rowIndex;
+                    td.dataset.col = colIndex;
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+            previewContainer.innerHTML = '';
+            previewContainer.appendChild(table);
+        }
+
+        handleMapperCellClick(event) {
+            const cell = event.target.closest('td');
+            if (!cell) return;
+            const { step } = this.mappingState;
+            if (step === 'regions') cell.classList.toggle('selected-region');
+            else if (step === 'categories') cell.classList.toggle('selected-category');
+            else if (step === 'columns') cell.classList.toggle('selected-column');
+        }
+
+        handleMapperConfirm() {
+            const { step } = this.mappingState;
+            const instructionsEl = document.getElementById('mapper-instructions');
+            const confirmBtn = document.getElementById('btn-mapper-confirm');
+
+            if (step === 'regions') {
+                document.querySelectorAll('.selected-region').forEach(cell => {
+                    this.mappingState.map.regions.push({ name: cell.textContent, rowIndex: parseInt(cell.dataset.row) });
+                });
+                if(this.mappingState.map.regions.length === 0) return alert('Please select at least one region cell.');
+                this.mappingState.map.regions.sort((a,b) => a.rowIndex - b.rowIndex);
+                this.mappingState.step = 'categories';
+                const firstRegion = this.mappingState.map.regions[0].name;
+                instructionsEl.textContent = `Now, for region "${firstRegion}", click on the CATEGORY cells.`;
+                confirmBtn.textContent = 'Confirm Categories';
+            } else if (step === 'categories') {
+                 document.querySelectorAll('.selected-category').forEach(cell => {
+                    const regionName = this.mappingState.map.regions[this.mappingState.activeRegionIndex].name;
+                    if(!this.mappingState.map.categories[regionName]) this.mappingState.map.categories[regionName] = [];
+                    this.mappingState.map.categories[regionName].push({ name: cell.textContent, rowIndex: parseInt(cell.dataset.row) });
+                });
+                
+                this.mappingState.activeRegionIndex++;
+                if(this.mappingState.activeRegionIndex < this.mappingState.map.regions.length) {
+                    const nextRegion = this.mappingState.map.regions[this.mappingState.activeRegionIndex].name;
+                    instructionsEl.textContent = `Great. Now for region "${nextRegion}", click the CATEGORY cells.`;
+                } else {
+                    this.mappingState.step = 'columns';
+                    const firstRegionName = this.mappingState.map.regions[0].name;
+                    const firstCategoryName = this.mappingState.map.categories[firstRegionName][0].name;
+                    instructionsEl.textContent = `Finally, for category "${firstCategoryName}", click on the COLUMN HEADERS (e.g., Order #).`;
+                    confirmBtn.textContent = 'Finish & Save Map';
+                }
+            } else if (step === 'columns') {
+                const regionName = this.mappingState.map.regions[0].name;
+                const categoryName = this.mappingState.map.categories[regionName][0].name;
+                if(!this.mappingState.map.columns[categoryName]) this.mappingState.map.columns[categoryName] = [];
+                document.querySelectorAll('.selected-column').forEach(cell => {
+                    this.mappingState.map.columns[categoryName].push({ name: cell.textContent, colIndex: parseInt(cell.dataset.col) });
+                });
+                this.finalizeMapAndSave();
+            }
+            document.querySelectorAll('td.selected-region, td.selected-category, td.selected-column').forEach(c => c.classList.remove('selected-region', 'selected-category', 'selected-column'));
+        }
+
+        finalizeMapAndSave() {
+            const templateName = prompt("Enter a name for this new mapped template:", "Mapped Report");
+            if (!templateName) return;
+            const id = `template-${Date.now()}`;
+            const newTemplate = { id, name: templateName, isMapped: true, map: this.mappingState.map };
+            this.templates[id] = newTemplate;
+            this.saveToStorage('templates', this.templates);
+            this.saveToStorage(`workbook_${id}`, XLSX.write(this.mappingState.originalWorkbook, {type: 'base64'}));
+            alert("Template mapped and saved successfully!");
+            this.showTemplatesView();
+        }
         
         renderFillerView() {
             const template = this.templates[this.editingTemplateId];
@@ -335,11 +465,13 @@
             const container = document.getElementById('filler-sections-container');
             container.innerHTML = '';
             
-            for(const sectionId in template.sections) {
-                const section = template.sections[sectionId];
+            const sections = template.isMapped ? this.getSectionsFromMap(template.map) : template.sections;
+
+            for(const sectionId in sections) {
+                const section = sections[sectionId];
                 const sectionDiv = document.createElement('div');
                 sectionDiv.className = 'p-4 border border-gray-700 rounded-lg';
-                sectionDiv.dataset.sectionId = sectionId; // <-- BUG FIX: Added data-id to section container
+                sectionDiv.dataset.sectionId = sectionId;
                 sectionDiv.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-bold text-lg text-white">${section.name}</h3>
@@ -348,26 +480,36 @@
                     <div class="data-rows-container space-y-3"></div>
                 `;
                 container.appendChild(sectionDiv);
-                this.addFillerRow(sectionId, section); // Add first row
+                this.addFillerRow(sectionId, section);
                 sectionDiv.querySelector('.btn-add-row').addEventListener('click', (e) => this.addFillerRow(e.target.dataset.sectionId, section));
                 this.makeRowsDraggable(sectionDiv.querySelector('.data-rows-container'));
             }
         }
 
+        getSectionsFromMap(map) {
+            const sections = {};
+            for(const regionName in map.categories) {
+                map.categories[regionName].forEach(category => {
+                    const sectionId = `${regionName}-${category.name}`.replace(/\s/g, '');
+                    sections[sectionId] = {
+                        name: `${regionName} - ${category.name}`,
+                        columns: map.columns[Object.keys(map.columns)[0]] || []
+                    };
+                });
+            }
+            return sections;
+        }
+
         addFillerRow(sectionId, section) {
             const rowId = `row-${Date.now()}`;
-            // BUG FIX: Correctly select the container within the specific section
             const rowContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
-            if (!rowContainer) {
-                console.error("Could not find row container for section:", sectionId);
-                return;
-            }
+            if (!rowContainer) return;
             const rowDiv = document.createElement('div');
             rowDiv.className = 'p-2 border border-gray-600 rounded-md draggable-row';
             rowDiv.draggable = true;
             rowDiv.dataset.rowId = rowId;
             
-            let gridHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">';
+            let gridHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">`;
             section.columns.forEach((col, index) => {
                 const fieldId = `${this.editingTemplateId}-${sectionId}-${rowId}-col-${index}`;
                 const recentValue = this.recentFills[fieldId] || '';
@@ -396,7 +538,6 @@
 
         duplicateFillerRow(rowId) {
             const originalRow = document.querySelector(`[data-row-id="${rowId}"]`);
-            // BUG FIX: Correctly find the sectionId from the parent container
             const sectionDiv = originalRow.closest('[data-section-id]');
             if (!sectionDiv) return;
             const sectionId = sectionDiv.dataset.sectionId;
