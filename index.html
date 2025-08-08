@@ -173,8 +173,20 @@
             this.recentFills = this.loadFromStorage('recentFills') || {};
             this.editingTemplateId = null;
             this.draggedItem = null;
+            this.resetMappingState(); // BUG FIX: Initialize state correctly
             this.initDOM();
             this.showTemplatesView();
+        }
+
+        // BUG FIX: Added the missing function
+        resetMappingState() {
+            this.mappingState = {
+                step: 'regions',
+                map: { regions: [], categories: {}, columns: {} },
+                activeRegionIndex: 0,
+                originalWorkbook: null,
+                originalSheetData: null,
+            };
         }
 
         initDOM() {
@@ -541,7 +553,9 @@
             const sectionDiv = originalRow.closest('[data-section-id]');
             if (!sectionDiv) return;
             const sectionId = sectionDiv.dataset.sectionId;
-            const section = this.templates[this.editingTemplateId].sections[sectionId];
+            const template = this.templates[this.editingTemplateId];
+            const sections = template.isMapped ? this.getSectionsFromMap(template.map) : template.sections;
+            const section = sections[sectionId];
             this.addFillerRow(sectionId, section);
             const newRow = originalRow.parentElement.lastChild;
             const originalInputs = originalRow.querySelectorAll('input');
@@ -594,6 +608,10 @@
         exportToExcel() {
             const template = this.templates[this.editingTemplateId];
             this.saveRecentFills();
+            if (template.isMapped) {
+                this.exportMappedExcel();
+                return;
+            }
             const wb = XLSX.utils.book_new();
             for(const sectionId in template.sections) {
                 const section = template.sections[sectionId];
@@ -614,13 +632,43 @@
             this.togglePublishModal(false);
         }
 
+        exportMappedExcel() {
+            const template = this.templates[this.editingTemplateId];
+            const originalWorkbookB64 = this.loadFromStorage(`workbook_${template.id}`);
+            if(!originalWorkbookB64) return alert("Original workbook data not found!");
+            const wb = XLSX.read(originalWorkbookB64, {type: 'base64'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+
+            const sections = this.getSectionsFromMap(template.map);
+            for(const sectionId in sections) {
+                const section = sections[sectionId];
+                const regionName = section.name.split(' - ')[0];
+                const categoryName = section.name.split(' - ')[1];
+                
+                const categoryMap = template.map.categories[regionName].find(c => c.name === categoryName);
+                let insertRowIndex = categoryMap.rowIndex + 2; // Start inserting 2 rows below category title
+
+                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
+                sectionContainer.querySelectorAll('.draggable-row').forEach(row => {
+                    const rowData = [];
+                    row.querySelectorAll('input').forEach(input => rowData.push(input.value));
+                    XLSX.utils.sheet_add_aoa(ws, [rowData], { origin: `A${insertRowIndex}` });
+                    insertRowIndex++;
+                });
+            }
+
+            XLSX.writeFile(wb, `${template.name}_Filled.xlsx`);
+            this.togglePublishModal(false);
+        }
+
         exportToCsv() {
             const template = this.templates[this.editingTemplateId];
             this.saveRecentFills();
             let csvContent = "data:text/csv;charset=utf-8,";
             
-            for(const sectionId in template.sections) {
-                const section = template.sections[sectionId];
+            const sections = template.isMapped ? this.getSectionsFromMap(template.map) : template.sections;
+            for(const sectionId in sections) {
+                const section = sections[sectionId];
                 csvContent += section.name + '\r\n';
                 const headers = section.columns.map(c => c.name);
                 csvContent += headers.join(',') + '\r\n';
@@ -649,8 +697,9 @@
             this.saveRecentFills();
             let html = `<html><head><title>${template.name} Report</title><style>body{font-family:sans-serif; margin: 2em;} h1,h2{color:#333;} table{border-collapse:collapse; width:100%; margin-bottom:2em;} th,td{border:1px solid #ccc; padding:8px; text-align:left;} th{background-color:#f2f2f2;}</style></head><body>`;
             html += `<h1>${template.name}</h1>`;
-            for(const sectionId in template.sections) {
-                const section = template.sections[sectionId];
+            const sections = template.isMapped ? this.getSectionsFromMap(template.map) : template.sections;
+            for(const sectionId in sections) {
+                const section = sections[sectionId];
                 html += `<h2>${section.name}</h2><table><thead><tr>`;
                 section.columns.forEach(c => html += `<th>${c.name}</th>`);
                 html += `</tr></thead><tbody>`;
