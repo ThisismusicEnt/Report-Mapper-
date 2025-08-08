@@ -3,45 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Report Mapper</title>
+    <title>Report Architect</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --traffic-yellow: #FFD700;
+            --glow-yellow: #FFFF55;
+            --dark-grey: #1f2937;
+            --medium-grey: #374151;
+            --light-grey: #4b5563;
+        }
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* gray-900 */
+            background-color: #0a0a0a;
         }
-        .btn {
-            transition: all 0.3s ease-in-out;
-        }
+        .btn { transition: all 0.2s ease-in-out; }
         .btn-primary {
-            background-color: #f59e0b; /* amber-500 */
+            background-color: var(--traffic-yellow);
             color: #111827;
-            box-shadow: 0 0 8px #f59e0b, 0 0 16px #f59e0b;
+            font-weight: bold;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: 1px solid var(--glow-yellow);
+            box-shadow: 0 0 8px var(--traffic-yellow), 0 0 16px var(--traffic-yellow), inset 0 1px 1px rgba(255,255,255,0.5);
         }
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 0 12px #fbbf24, 0 0 24px #fbbf24;
+            box-shadow: 0 0 12px var(--glow-yellow), 0 0 24px var(--glow-yellow), inset 0 1px 2px rgba(255,255,255,0.6);
+        }
+        .btn-secondary {
+            background-color: #111827;
+            color: white;
+            font-weight: bold;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem; /* py-2 px-4 */
+            border: 1px solid var(--traffic-yellow);
+            box-shadow: 0 0 5px var(--traffic-yellow);
+            transition: all 0.3s ease-in-out;
+        }
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 10px var(--glow-yellow), 0 0 20px var(--glow-yellow);
         }
         .card {
-            background-color: rgba(31, 41, 55, 0.5); /* gray-800 with transparency */
-            border: 1px solid #f59e0b;
-            backdrop-filter: blur(10px);
+            background: linear-gradient(145deg, #2d3748, #1f2937);
+            border: 1px solid var(--medium-grey);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
         }
-        #spreadsheet-preview table {
-            border-collapse: separate;
-            border-spacing: 0;
+        input, select, textarea {
+            background-color: #111827;
+            border: 1px solid var(--medium-grey);
+            box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.2);
         }
-        #spreadsheet-preview th, #spreadsheet-preview td {
-            border: 1px solid #4b5563; /* gray-600 */
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--traffic-yellow);
+            box-shadow: 0 0 0 2px var(--dark-grey), 0 0 0 4px var(--traffic-yellow);
+            outline: none;
+        }
+        #spreadsheet-preview table { border-collapse: separate; border-spacing: 0; }
+        #spreadsheet-preview td {
+            border: 1px solid var(--light-grey);
             transition: background-color 0.2s;
             cursor: pointer;
+            min-width: 100px;
+            padding: 0.5rem;
         }
-        #spreadsheet-preview th:hover, #spreadsheet-preview td:hover {
-            background-color: #ca8a04; /* yellow-600 */
-        }
+        #spreadsheet-preview td:hover { background-color: #ca8a04; }
         .selected-region { background-color: #be123c !important; color: white; }
         .selected-category { background-color: #1d4ed8 !important; color: white; }
         .selected-column { background-color: #047857 !important; color: white; }
@@ -49,266 +80,426 @@
 </head>
 <body class="text-gray-200">
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+    <div id="app" class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- App Header -->
         <header class="text-center mb-10">
-            <h1 class="text-4xl sm:text-5xl font-bold text-white">Report Mapper</h1>
-            <p class="mt-3 text-lg text-gray-400">Visually map your template, then fill it out with ease.</p>
+            <h1 class="text-4xl sm:text-5xl font-bold text-white">Report Architect</h1>
+            <p class="mt-3 text-lg text-gray-400">Design, Manage, and Fill Your Reports Intelligently.</p>
         </header>
 
-        <!-- Main Application Body -->
-        <div class="space-y-8">
-            <!-- Step 1: Upload Template -->
-            <div id="step-upload" class="card p-8 rounded-2xl">
-                <h2 class="text-2xl font-bold mb-4 text-amber-400">Step 1: Upload Your Excel Template</h2>
-                <label for="template-upload" class="flex justify-center w-full h-32 px-4 transition bg-gray-800 border-2 border-amber-500 border-dashed rounded-md appearance-none cursor-pointer hover:border-amber-400 focus:outline-none">
-                    <span class="flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        <span id="template-filename" class="font-medium text-gray-400">Drop files to Attach, or <span class="text-amber-400">browse</span></span>
-                    </span>
-                </label>
-                <input type="file" id="template-upload" class="hidden" accept=".xlsx, .xls">
-            </div>
-
-            <!-- Step 2: Map Template Structure -->
-            <div id="step-map" class="card p-8 rounded-2xl hidden">
-                <h2 class="text-2xl font-bold mb-2 text-amber-400">Step 2: Map Your Template</h2>
-                <p id="mapping-instructions" class="text-gray-400 mb-4">Click on the cells in the preview below that represent your main REGIONS (e.g., WKY, INNE).</p>
-                <div id="spreadsheet-preview" class="w-full overflow-x-auto bg-gray-900 p-4 rounded-lg"></div>
-                <div class="text-center mt-6">
-                    <button id="confirm-mapping-btn" class="btn btn-primary font-bold py-3 px-8 rounded-lg">Confirm Regions</button>
+        <!-- Main Content Area -->
+        <div id="main-content" class="space-y-8">
+            <!-- Template Selection / Management View -->
+            <div id="view-templates" class="card p-6 sm:p-8">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold" style="color: var(--traffic-yellow);">My Report Templates</h2>
+                    <div class="flex gap-4">
+                        <button id="btn-import-template" class="btn btn-secondary">Import & Map Excel</button>
+                        <button id="btn-new-template" class="btn btn-primary">Create From Scratch</button>
+                    </div>
+                </div>
+                <div id="template-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Template cards will be injected here -->
                 </div>
             </div>
 
-            <!-- Step 3: Data Entry Wizard -->
-            <div id="step-wizard" class="card p-8 rounded-2xl hidden">
-                 <h2 class="text-2xl font-bold mb-4 text-amber-400">Step 3: Fill Your Report</h2>
-                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="region-select" class="block mb-2 font-medium text-gray-300">Region</label>
-                        <select id="region-select" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500"></select>
-                    </div>
-                    <div>
-                        <label for="category-select" class="block mb-2 font-medium text-gray-300">Category</label>
-                        <select id="category-select" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500"></select>
-                    </div>
+            <!-- Template Editor/Creator View -->
+            <div id="view-editor" class="hidden card p-6 sm:p-8 space-y-6">
+                <div>
+                    <h2 id="editor-title" class="text-2xl font-bold" style="color: var(--traffic-yellow);">Create New Template</h2>
+                    <input id="template-name-input" type="text" placeholder="Enter Template Name..." class="w-full mt-4 p-3 rounded-lg">
                 </div>
-                <div id="data-input-section" class="hidden space-y-4 pt-6">
-                    <h3 id="data-input-header" class="text-xl font-semibold"></h3>
-                    <textarea id="text-data" rows="5" class="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg" placeholder="Paste text data here..."></textarea>
-                    <input type="file" id="screenshots-upload" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-gray-900 hover:file:bg-amber-400" multiple accept="image/*">
-                    <div class="text-center pt-4">
-                        <button id="add-to-report" class="btn btn-primary font-bold py-3 px-8 rounded-lg">Add Data to Report</button>
-                    </div>
+                <div id="sections-container" class="space-y-4"></div>
+                <div class="flex justify-between items-center pt-4">
+                    <button id="btn-add-section" class="btn bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg">Add Section</button>
+                    <button id="btn-save-template" class="btn btn-primary">Save Template</button>
                 </div>
-                <div id="processing-log" class="hidden pt-4">
-                     <div id="log-container" class="bg-gray-900 p-4 rounded-lg h-32 overflow-y-auto text-sm font-mono"></div>
+                 <button id="btn-back-to-list" class="hover:underline mt-4" style="color: var(--traffic-yellow);">&larr; Back to Templates</button>
+            </div>
+
+            <!-- Excel Mapper View -->
+            <div id="view-mapper" class="hidden card p-6 sm:p-8 space-y-6">
+                 <h2 id="mapper-title" class="text-2xl font-bold" style="color: var(--traffic-yellow);">Map Your Excel Template</h2>
+                 <p id="mapper-instructions" class="text-gray-400">First, click on the cells in the preview that represent your main REGIONS.</p>
+                 <div id="spreadsheet-preview" class="w-full overflow-x-auto bg-gray-900 p-2 rounded-lg"></div>
+                 <div class="flex justify-end gap-4 pt-4">
+                     <button id="btn-mapper-back" class="hover:underline" style="color: var(--traffic-yellow);">&larr; Back</button>
+                     <button id="btn-mapper-confirm" class="btn btn-primary">Confirm Regions</button>
                  </div>
             </div>
-
-            <!-- Step 4: Download -->
-            <div id="step-download" class="card p-8 rounded-2xl hidden">
-                <h2 class="text-2xl font-bold mb-4 text-amber-400">Step 4: Download</h2>
-                <p class="text-gray-400 mb-4">Your report has been updated. Download it now or continue adding more sections.</p>
-                <div class="text-center">
-                    <a id="download-link" class="btn btn-primary font-bold py-3 px-8 rounded-lg inline-block">Download Report</a>
-                </div>
+            
+            <!-- Data Entry View -->
+            <div id="view-filler" class="hidden card p-6 sm:p-8 space-y-6">
+                 <h2 id="filler-title" class="text-2xl font-bold" style="color: var(--traffic-yellow);">Fill Report</h2>
+                 <div id="filler-sections-container" class="space-y-6"></div>
+                 <div class="flex justify-between items-center pt-4">
+                     <button id="btn-filler-back" class="hover:underline" style="color: var(--traffic-yellow);">&larr; Back to Templates</button>
+                     <button id="btn-export-report" class="btn btn-primary">Export to Excel</button>
+                 </div>
             </div>
         </div>
+        <input type="file" id="import-file-input" class="hidden" accept=".xlsx, .xls">
     </div>
 
     <script>
-        // --- State Management ---
-        let workbook, sheetData;
-        let mappingState = 'regions'; // 'regions', 'categories', 'columns'
-        let templateMap = { regions: [], categories: {}, columns: {} };
-        let currentRegion, currentCategory, activeRegionForMapping;
-
-        // --- DOM References ---
-        const steps = {
-            upload: document.getElementById('step-upload'),
-            map: document.getElementById('step-map'),
-            wizard: document.getElementById('step-wizard'),
-            download: document.getElementById('step-download'),
-        };
-        const templateUpload = document.getElementById('template-upload');
-        const templateFilename = document.getElementById('template-filename');
-        const previewContainer = document.getElementById('spreadsheet-preview');
-        const mappingInstructions = document.getElementById('mapping-instructions');
-        const confirmMappingBtn = document.getElementById('confirm-mapping-btn');
-        const regionSelect = document.getElementById('region-select');
-        const categorySelect = document.getElementById('category-select');
-        const dataInputSection = document.getElementById('data-input-section');
-        const dataInputHeader = document.getElementById('data-input-header');
-        const textDataInput = document.getElementById('text-data');
-        const screenshotsUpload = document.getElementById('screenshots-upload');
-        const addToReportBtn = document.getElementById('add-to-report');
-        const logContainer = document.getElementById('log-container');
-        const downloadLink = document.getElementById('download-link');
-
-        // --- Event Listeners ---
-        templateUpload.addEventListener('change', handleTemplateUpload);
-        previewContainer.addEventListener('click', handleCellClick);
-        confirmMappingBtn.addEventListener('click', handleConfirmMapping);
-        regionSelect.addEventListener('change', handleRegionChange);
-        categorySelect.addEventListener('change', handleCategoryChange);
-        addToReportBtn.addEventListener('click', processSectionData);
-
-        // --- Core Functions ---
-        async function handleTemplateUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            templateFilename.textContent = `Loaded: ${file.name}`;
-            
-            const data = await file.arrayBuffer();
-            workbook = XLSX.read(data);
-            const ws = workbook.Sheets[workbook.SheetNames[0]];
-            sheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-            renderSpreadsheetPreview();
-            steps.upload.classList.add('hidden');
-            steps.map.classList.remove('hidden');
+    class ReportArchitect {
+        constructor() {
+            this.templates = this.loadFromStorage('templates') || {};
+            this.recentFills = this.loadFromStorage('recentFills') || {};
+            this.editingTemplateId = null;
+            this.resetMappingState();
+            this.initDOM();
+            this.showTemplatesView();
+        }
+        
+        resetMappingState() {
+            this.mappingState = {
+                step: 'regions',
+                map: { regions: [], categories: {}, columns: {} },
+                activeRegionIndex: 0,
+                originalWorkbook: null,
+                originalSheetData: null,
+            };
         }
 
-        function renderSpreadsheetPreview() {
+        initDOM() {
+            this.views = {
+                templates: document.getElementById('view-templates'),
+                editor: document.getElementById('view-editor'),
+                filler: document.getElementById('view-filler'),
+                mapper: document.getElementById('view-mapper'),
+            };
+            document.getElementById('btn-new-template').addEventListener('click', () => this.showEditor());
+            document.getElementById('btn-import-template').addEventListener('click', () => document.getElementById('import-file-input').click());
+            document.getElementById('import-file-input').addEventListener('change', (e) => this.startMapper(e.target.files[0]));
+            document.getElementById('btn-add-section').addEventListener('click', () => this.addSection());
+            document.getElementById('btn-save-template').addEventListener('click', () => this.saveTemplate());
+            document.getElementById('btn-back-to-list').addEventListener('click', () => this.showTemplatesView());
+            document.getElementById('btn-mapper-back').addEventListener('click', () => this.showTemplatesView());
+            document.getElementById('btn-mapper-confirm').addEventListener('click', () => this.handleMapperConfirm());
+            document.getElementById('spreadsheet-preview').addEventListener('click', (e) => this.handleMapperCellClick(e));
+            document.getElementById('btn-filler-back').addEventListener('click', () => this.showTemplatesView());
+            document.getElementById('btn-export-report').addEventListener('click', () => this.exportToExcel());
+        }
+
+        switchView(viewName) {
+            Object.values(this.views).forEach(v => v.classList.add('hidden'));
+            if(this.views[viewName]) this.views[viewName].classList.remove('hidden');
+        }
+
+        showTemplatesView() {
+            this.editingTemplateId = null;
+            this.resetMappingState();
+            this.renderTemplatesView();
+            this.switchView('templates');
+        }
+
+        showEditor(templateId = null) {
+            this.editingTemplateId = templateId;
+            this.renderEditorView();
+            this.switchView('editor');
+        }
+        
+        showFiller(templateId) {
+            this.editingTemplateId = templateId;
+            this.renderFillerView();
+            this.switchView('filler');
+        }
+        
+        renderTemplatesView() {
+            const listEl = document.getElementById('template-list');
+            listEl.innerHTML = '';
+            if (Object.keys(this.templates).length === 0) {
+                listEl.innerHTML = `<p class="text-gray-500 col-span-full text-center py-8">No templates created yet. Click a button above to start!</p>`;
+                return;
+            }
+            for (const id in this.templates) {
+                const template = this.templates[id];
+                const card = document.createElement('div');
+                card.className = 'bg-gray-800 p-4 rounded-lg flex flex-col justify-between border border-gray-700 hover:border-yellow-500 transition-all';
+                card.innerHTML = `
+                    <div>
+                        <h3 class="font-bold text-lg text-white truncate">${template.name}</h3>
+                        <p class="text-sm text-gray-400">${template.isMapped ? 'Mapped Excel Template' : 'Created From Scratch'}</p>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button class="btn-edit btn bg-gray-600 hover:bg-gray-500 text-sm py-1 px-3 rounded-md" data-id="${id}">Edit</button>
+                        <button class="btn-fill btn btn-primary text-sm py-1 px-3" data-id="${id}">Fill Report</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            }
+            listEl.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', (e) => this.showEditor(e.target.dataset.id)));
+            listEl.querySelectorAll('.btn-fill').forEach(b => b.addEventListener('click', (e) => this.showFiller(e.target.dataset.id)));
+        }
+
+        renderEditorView() {
+            const isEditing = this.editingTemplateId && this.templates[this.editingTemplateId];
+            document.getElementById('editor-title').textContent = isEditing ? 'Edit Template' : 'Create New Template';
+            const templateNameInput = document.getElementById('template-name-input');
+            const sectionsContainer = document.getElementById('sections-container');
+            sectionsContainer.innerHTML = '';
+
+            if (isEditing) {
+                const template = this.templates[this.editingTemplateId];
+                if(template.isMapped) {
+                    alert("Editing mapped templates is not supported. Please create a new one from scratch if you need to make changes.");
+                    this.showTemplatesView();
+                    return;
+                }
+                templateNameInput.value = template.name;
+                Object.keys(template.sections).forEach(id => this.addSection(id, template.sections[id]));
+            } else {
+                templateNameInput.value = '';
+                this.addSection();
+            }
+        }
+        
+        addSection(id, data = { name: '', columns: [{ name: '', keywords: '' }] }) {
+            const sectionId = id || `section-${Date.now()}`;
+            const sectionDiv = document.createElement('div');
+            sectionDiv.className = 'p-4 border border-gray-700 rounded-lg space-y-3';
+            sectionDiv.dataset.sectionId = sectionId;
+            sectionDiv.innerHTML = `
+                <input type="text" value="${data.name}" class="section-name-input w-full p-2 rounded-md" placeholder="Section Name (e.g., Field Training)">
+                <div class="columns-container space-y-2"></div>
+                <button class="btn-add-column text-sm text-blue-400 hover:text-blue-300">+ Add Column</button>
+            `;
+            document.getElementById('sections-container').appendChild(sectionDiv);
+            data.columns.forEach(col => this.addColumn(sectionId, col));
+            sectionDiv.querySelector('.btn-add-column').addEventListener('click', () => this.addColumn(sectionId));
+        }
+        
+        addColumn(sectionId, data = { name: '', keywords: ''}) {
+            const colContainer = document.querySelector(`[data-section-id="${sectionId}"] .columns-container`);
+            const colDiv = document.createElement('div');
+            colDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-2';
+            colDiv.innerHTML = `
+                <input type="text" value="${data.name}" class="column-name-input p-2 rounded-md" placeholder="Column Name (e.g., Trainer)">
+                <input type="text" value="${data.keywords}" class="column-keywords-input p-2 rounded-md" placeholder="Keywords (comma-separated)">
+            `;
+            colContainer.appendChild(colDiv);
+        }
+
+        saveTemplate() {
+            const id = this.editingTemplateId || `template-${Date.now()}`;
+            const name = document.getElementById('template-name-input').value.trim();
+            if (!name) return alert('Please enter a template name.');
+            
+            const template = { id, name, isMapped: false, sections: {} };
+            document.querySelectorAll('#sections-container > div').forEach(sectionDiv => {
+                const sectionId = sectionDiv.dataset.sectionId;
+                const sectionName = sectionDiv.querySelector('.section-name-input').value.trim();
+                if(!sectionName) return;
+                template.sections[sectionId] = { name: sectionName, columns: [] };
+                sectionDiv.querySelectorAll('.columns-container > div').forEach(colDiv => {
+                    const colName = colDiv.querySelector('.column-name-input').value.trim();
+                    const keywords = colDiv.querySelector('.column-keywords-input').value.trim();
+                    if(colName) template.sections[sectionId].columns.push({ name: colName, keywords });
+                });
+            });
+            
+            this.templates[id] = template;
+            this.saveToStorage('templates', this.templates);
+            this.showTemplatesView();
+        }
+
+        async startMapper(file) {
+            if (!file) return;
+            this.resetMappingState();
+            const data = await file.arrayBuffer();
+            this.mappingState.originalWorkbook = XLSX.read(data);
+            const ws = this.mappingState.originalWorkbook.Sheets[this.mappingState.originalWorkbook.SheetNames[0]];
+            this.mappingState.originalSheetData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+            this.renderSpreadsheetPreview();
+            this.switchView('mapper');
+        }
+
+        renderSpreadsheetPreview() {
+            const previewContainer = document.getElementById('spreadsheet-preview');
             const table = document.createElement('table');
-            table.className = 'w-full text-sm text-left';
-            const tbody = document.createElement('tbody');
-            sheetData.slice(0, 30).forEach((row, rowIndex) => { // Preview first 30 rows
+            this.mappingState.originalSheetData.slice(0, 40).forEach((row, rowIndex) => {
                 const tr = document.createElement('tr');
                 row.forEach((cell, colIndex) => {
                     const td = document.createElement('td');
-                    td.className = 'p-2';
-                    td.textContent = cell;
+                    td.textContent = cell || '';
                     td.dataset.row = rowIndex;
                     td.dataset.col = colIndex;
                     tr.appendChild(td);
                 });
-                tbody.appendChild(tr);
+                table.appendChild(tr);
             });
-            table.appendChild(tbody);
             previewContainer.innerHTML = '';
             previewContainer.appendChild(table);
         }
 
-        function handleCellClick(event) {
+        handleMapperCellClick(event) {
             const cell = event.target.closest('td');
             if (!cell) return;
-
-            const { row, col } = cell.dataset;
-            const rowIndex = parseInt(row);
-            const colIndex = parseInt(col);
-            const cellValue = sheetData[rowIndex][colIndex];
-            if (!cellValue) return;
-
-            if (mappingState === 'regions') {
-                if (!templateMap.regions.find(r => r.rowIndex === rowIndex)) {
-                    templateMap.regions.push({ name: cellValue, rowIndex });
-                    cell.classList.add('selected-region');
-                }
-            } else if (mappingState === 'categories') {
-                if (!templateMap.categories[activeRegionForMapping].find(c => c.rowIndex === rowIndex)) {
-                    templateMap.categories[activeRegionForMapping].push({ name: cellValue, rowIndex });
-                    cell.classList.add('selected-category');
-                }
-            } else if (mappingState === 'columns') {
-                 if (!templateMap.columns[activeRegionForMapping][currentCategory].find(c => c.colIndex === colIndex)) {
-                    templateMap.columns[activeRegionForMapping][currentCategory].push({ name: cellValue, colIndex });
-                    cell.classList.add('selected-column');
-                }
-            }
+            const { step } = this.mappingState;
+            if (step === 'regions') cell.classList.toggle('selected-region');
+            else if (step === 'categories') cell.classList.toggle('selected-category');
+            else if (step === 'columns') cell.classList.toggle('selected-column');
         }
 
-        function handleConfirmMapping() {
-            if (mappingState === 'regions') {
-                if (templateMap.regions.length === 0) return alert('Please select at least one region cell.');
-                templateMap.regions.sort((a, b) => a.rowIndex - b.rowIndex);
-                activeRegionForMapping = templateMap.regions[0].name;
-                templateMap.categories[activeRegionForMapping] = [];
-                mappingState = 'categories';
-                mappingInstructions.textContent = `Great. Now, for the region "${activeRegionForMapping}", click on the cells that are CATEGORIES.`;
-                confirmMappingBtn.textContent = 'Confirm Categories';
-            } else if (mappingState === 'categories') {
-                const currentRegionIndex = templateMap.regions.findIndex(r => r.name === activeRegionForMapping);
-                if (currentRegionIndex < templateMap.regions.length - 1) {
-                    // Move to next region's categories
-                    activeRegionForMapping = templateMap.regions[currentRegionIndex + 1].name;
-                    templateMap.categories[activeRegionForMapping] = [];
-                    mappingInstructions.textContent = `Okay. Now for "${activeRegionForMapping}", click on the CATEGORY cells.`;
+        handleMapperConfirm() {
+            const { step } = this.mappingState;
+            const instructionsEl = document.getElementById('mapper-instructions');
+            const confirmBtn = document.getElementById('btn-mapper-confirm');
+
+            if (step === 'regions') {
+                document.querySelectorAll('.selected-region').forEach(cell => {
+                    this.mappingState.map.regions.push({ name: cell.textContent, rowIndex: parseInt(cell.dataset.row) });
+                });
+                if(this.mappingState.map.regions.length === 0) return alert('Please select at least one region cell.');
+                this.mappingState.map.regions.sort((a,b) => a.rowIndex - b.rowIndex);
+                this.mappingState.step = 'categories';
+                const firstRegion = this.mappingState.map.regions[0].name;
+                instructionsEl.textContent = `Now, for region "${firstRegion}", click on the CATEGORY cells.`;
+                confirmBtn.textContent = 'Confirm Categories';
+            } else if (step === 'categories') {
+                 document.querySelectorAll('.selected-category').forEach(cell => {
+                    const regionName = this.mappingState.map.regions[this.mappingState.activeRegionIndex].name;
+                    if(!this.mappingState.map.categories[regionName]) this.mappingState.map.categories[regionName] = [];
+                    this.mappingState.map.categories[regionName].push({ name: cell.textContent, rowIndex: parseInt(cell.dataset.row) });
+                });
+                
+                this.mappingState.activeRegionIndex++;
+                if(this.mappingState.activeRegionIndex < this.mappingState.map.regions.length) {
+                    const nextRegion = this.mappingState.map.regions[this.mappingState.activeRegionIndex].name;
+                    instructionsEl.textContent = `Great. Now for region "${nextRegion}", click the CATEGORY cells.`;
                 } else {
-                    // All categories for all regions are done, move to columns
-                    activeRegionForMapping = templateMap.regions[0].name;
-                    currentCategory = templateMap.categories[activeRegionForMapping][0].name;
-                    templateMap.columns[activeRegionForMapping] = { [currentCategory]: [] };
-                    mappingState = 'columns';
-                    mappingInstructions.textContent = `Perfect. For category "${currentCategory}", click on the COLUMN HEADERS (e.g., Order #, Client).`;
-                    confirmMappingBtn.textContent = 'Confirm Columns';
+                    this.mappingState.step = 'columns';
+                    const firstRegionName = this.mappingState.map.regions[0].name;
+                    const firstCategoryName = this.mappingState.map.categories[firstRegionName][0].name;
+                    instructionsEl.textContent = `Finally, for category "${firstCategoryName}", click on the COLUMN HEADERS (e.g., Order #).`;
+                    confirmBtn.textContent = 'Finish & Save Map';
                 }
-            } else if (mappingState === 'columns') {
-                // This logic needs to iterate through all categories of all regions
-                // For simplicity in this example, we'll assume we're done after the first set.
-                // A full implementation would cycle through all categories.
-                log('Mapping complete!');
-                finalizeMappingAndStartWizard();
+            } else if (step === 'columns') {
+                const regionName = this.mappingState.map.regions[0].name;
+                const categoryName = this.mappingState.map.categories[regionName][0].name;
+                if(!this.mappingState.map.columns[categoryName]) this.mappingState.map.columns[categoryName] = [];
+                document.querySelectorAll('.selected-column').forEach(cell => {
+                    this.mappingState.map.columns[categoryName].push({ name: cell.textContent, colIndex: parseInt(cell.dataset.col) });
+                });
+                this.finalizeMapAndSave();
+            }
+            document.querySelectorAll('td.selected-region, td.selected-category, td.selected-column').forEach(c => c.classList.remove('selected-region', 'selected-category', 'selected-column'));
+        }
+
+        finalizeMapAndSave() {
+            const templateName = prompt("Enter a name for this new mapped template:", "Mapped Report");
+            if (!templateName) return;
+            const id = `template-${Date.now()}`;
+            const newTemplate = { id, name: templateName, isMapped: true, map: this.mappingState.map };
+            this.templates[id] = newTemplate;
+            this.saveToStorage('templates', this.templates);
+            this.saveToStorage(`workbook_${id}`, XLSX.write(this.mappingState.originalWorkbook, {type: 'base64'}));
+            alert("Template mapped and saved successfully!");
+            this.showTemplatesView();
+        }
+        
+        renderFillerView() {
+            const template = this.templates[this.editingTemplateId];
+            document.getElementById('filler-title').textContent = `Fill: ${template.name}`;
+            const container = document.getElementById('filler-sections-container');
+            container.innerHTML = '';
+            
+            const sections = template.isMapped ? this.getSectionsFromMap(template.map) : template.sections;
+
+            for(const sectionId in sections) {
+                const section = sections[sectionId];
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'p-4 border border-gray-700 rounded-lg';
+                sectionDiv.innerHTML = `<h3 class="font-bold text-lg text-white mb-4">${section.name}</h3>`;
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+                section.columns.forEach((col, index) => {
+                    const fieldId = `${this.editingTemplateId}-${sectionId}-col-${index}`;
+                    const recentValue = this.recentFills[fieldId] || '';
+                    grid.innerHTML += `<div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">${col.name}</label>
+                        <input type="text" id="${fieldId}" value="${recentValue}" class="w-full p-2 rounded-md">
+                    </div>`;
+                });
+                sectionDiv.appendChild(grid);
+                container.appendChild(sectionDiv);
             }
         }
-        
-        function finalizeMappingAndStartWizard() {
-            steps.map.classList.add('hidden');
-            steps.wizard.classList.remove('hidden');
-            // Populate region dropdown from our map
-            regionSelect.innerHTML = '<option value="">-- Select Region --</option>';
-            templateMap.regions.forEach(r => {
-                const option = document.createElement('option');
-                option.value = r.name;
-                option.textContent = r.name;
-                regionSelect.appendChild(option);
-            });
-        }
 
-        function handleRegionChange() {
-            currentRegion = regionSelect.value;
-            categorySelect.innerHTML = '<option value="">-- Select Category --</option>';
-            if (!currentRegion || !templateMap.categories[currentRegion]) return;
-            templateMap.categories[currentRegion].forEach(c => {
-                 const option = document.createElement('option');
-                option.value = c.name;
-                option.textContent = c.name;
-                categorySelect.appendChild(option);
-            });
-        }
-
-        function handleCategoryChange() {
-            currentCategory = categorySelect.value;
-            dataInputSection.classList.toggle('hidden', !currentCategory);
-            if(currentCategory) dataInputHeader.textContent = `Add data for ${currentCategory}`;
+        getSectionsFromMap(map) {
+            const sections = {};
+            for(const regionName in map.categories) {
+                map.categories[regionName].forEach(category => {
+                    const sectionId = `${regionName}-${category.name}`.replace(/\s/g, '');
+                    sections[sectionId] = {
+                        name: `${regionName} - ${category.name}`,
+                        // This is simplified; assumes first category's columns apply to all
+                        columns: map.columns[Object.keys(map.columns)[0]] || []
+                    };
+                });
+            }
+            return sections;
         }
         
-        async function processSectionData() {
-            // This function would now use the detailed templateMap to find the exact
-            // row and column to insert data, making it fully generic.
-            // The logic would be similar to previous versions but replacing hardcoded
-            // searches with lookups in the templateMap object.
-            log(`Processing data for ${currentRegion} -> ${currentCategory}...`);
-            // Placeholder for demonstration
-            setTimeout(() => {
-                log('Data added successfully (demo).');
-                steps.download.classList.remove('hidden');
-                updateDownloadLink();
-            }, 1000);
+        exportToExcel() {
+            const template = this.templates[this.editingTemplateId];
+            this.saveRecentFills();
+            if (template.isMapped) this.exportMappedExcel();
+            else this.exportCreatedExcel();
+        }
+        
+        saveRecentFills() {
+             document.querySelectorAll('#filler-sections-container input').forEach(input => {
+                this.recentFills[input.id] = input.value;
+            });
+            this.saveToStorage('recentFills', this.recentFills);
         }
 
-        function updateDownloadLink() {
-            const newWb = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([newWb], {type: 'application/octet-stream'});
-            downloadLink.href = URL.createObjectURL(blob);
-            downloadLink.download = `Mapped_Report_${Date.now()}.xlsx`;
+        exportMappedExcel() {
+            const template = this.templates[this.editingTemplateId];
+            const originalWorkbookB64 = this.loadFromStorage(`workbook_${template.id}`);
+            if(!originalWorkbookB64) return alert("Original workbook data not found!");
+            const wb = XLSX.read(originalWorkbookB64, {type: 'base64'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+
+            // This is a complex logic placeholder. It would find the correct row based on the map
+            // and insert data from the filler form.
+            alert("Exporting for mapped templates is complex. This demonstrates saving the file.");
+
+            XLSX.writeFile(wb, `${template.name}_Filled.xlsx`);
         }
 
-        function log(message) {
-            logContainer.innerHTML += `<p>[${new Date().toLocaleTimeString()}] ${message}</p>`;
-            logContainer.scrollTop = logContainer.scrollHeight;
+        exportCreatedExcel() {
+            const template = this.templates[this.editingTemplateId];
+            const wb = XLSX.utils.book_new();
+            for(const sectionId in template.sections) {
+                const section = template.sections[sectionId];
+                const headers = section.columns.map(c => c.name);
+                const dataRow = section.columns.map((c, i) => {
+                    const fieldId = `${this.editingTemplateId}-${sectionId}-col-${i}`;
+                    return document.getElementById(fieldId)?.value || '';
+                });
+                const wsData = [ [section.name], [], headers, dataRow ];
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                XLSX.utils.book_append_sheet(wb, ws, section.name.slice(0, 30));
+            }
+            XLSX.writeFile(wb, `${template.name}_Report.xlsx`);
         }
 
+        saveToStorage(key, data) {
+            localStorage.setItem(`reportArchitect_${key}`, JSON.stringify(data));
+        }
+
+        loadFromStorage(key) {
+            const data = localStorage.getItem(`reportArchitect_${key}`);
+            try { return data ? JSON.parse(data) : null; } 
+            catch(e) { return data; }
+        }
+    }
+
+    window.app = new ReportArchitect();
     </script>
 </body>
 </html>
+
