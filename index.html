@@ -108,7 +108,10 @@
                 </div>
                 <div id="sections-container" class="space-y-4"></div>
                 <div class="flex justify-between items-center pt-4">
-                    <button id="btn-add-section" class="btn bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg">Add Section</button>
+                    <div>
+                        <button id="btn-add-section" class="btn bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg">Add New Section</button>
+                        <button id="btn-duplicate-last-section" class="btn bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg ml-4">Duplicate Last</button>
+                    </div>
                     <button id="btn-save-template" class="btn btn-primary">Save Template</button>
                 </div>
                  <button id="btn-back-to-list" class="hover:underline mt-4" style="color: var(--traffic-yellow);">&larr; Back to Templates</button>
@@ -163,6 +166,7 @@
 
             // Editor buttons
             document.getElementById('btn-add-section').addEventListener('click', () => this.addSection());
+            document.getElementById('btn-duplicate-last-section').addEventListener('click', () => this.duplicateLastSection());
             document.getElementById('btn-save-template').addEventListener('click', () => this.saveTemplate());
             document.getElementById('btn-back-to-list').addEventListener('click', () => this.showTemplatesView());
 
@@ -280,6 +284,17 @@
             this.addSection(null, { name: `${name} (Copy)`, columns });
         }
         
+        duplicateLastSection() {
+            const sectionsContainer = document.getElementById('sections-container');
+            const lastSection = sectionsContainer.querySelector('.p-4:last-child');
+            if (lastSection) {
+                const sectionId = lastSection.dataset.sectionId;
+                this.duplicateSection(sectionId);
+            } else {
+                alert("No section to duplicate. Please add a section first.");
+            }
+        }
+
         addColumn(sectionId, data = { name: '', keywords: ''}) {
             const colContainer = document.querySelector(`[data-section-id="${sectionId}"] .columns-container`);
             const colDiv = document.createElement('div');
@@ -507,6 +522,13 @@
             this.togglePublishModal(false);
         }
         
+        saveRecentFills() {
+             document.querySelectorAll('#filler-sections-container input').forEach(input => {
+                this.recentFills[input.id] = input.value;
+            });
+            this.saveToStorage('recentFills', this.recentFills);
+        }
+
         saveToStorage(key, data) {
             localStorage.setItem(`reportArchitect_${key}`, JSON.stringify(data));
         }
@@ -522,7 +544,7 @@
     </script>
 </body>
 </html>
-hitect();
+
     </script>
 </body>
 </html>
