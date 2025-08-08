@@ -339,6 +339,7 @@
                 const section = template.sections[sectionId];
                 const sectionDiv = document.createElement('div');
                 sectionDiv.className = 'p-4 border border-gray-700 rounded-lg';
+                sectionDiv.dataset.sectionId = sectionId; // <-- BUG FIX: Added data-id to section container
                 sectionDiv.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-bold text-lg text-white">${section.name}</h3>
@@ -355,7 +356,12 @@
 
         addFillerRow(sectionId, section) {
             const rowId = `row-${Date.now()}`;
-            const rowContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"]`).nextElementSibling.querySelector('.data-rows-container');
+            // BUG FIX: Correctly select the container within the specific section
+            const rowContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
+            if (!rowContainer) {
+                console.error("Could not find row container for section:", sectionId);
+                return;
+            }
             const rowDiv = document.createElement('div');
             rowDiv.className = 'p-2 border border-gray-600 rounded-md draggable-row';
             rowDiv.draggable = true;
@@ -390,7 +396,10 @@
 
         duplicateFillerRow(rowId) {
             const originalRow = document.querySelector(`[data-row-id="${rowId}"]`);
-            const sectionId = originalRow.closest('.p-4').previousElementSibling.querySelector('.btn-add-row').dataset.sectionId;
+            // BUG FIX: Correctly find the sectionId from the parent container
+            const sectionDiv = originalRow.closest('[data-section-id]');
+            if (!sectionDiv) return;
+            const sectionId = sectionDiv.dataset.sectionId;
             const section = this.templates[this.editingTemplateId].sections[sectionId];
             this.addFillerRow(sectionId, section);
             const newRow = originalRow.parentElement.lastChild;
@@ -450,7 +459,7 @@
                 const headers = section.columns.map(c => c.name);
                 const wsData = [ [section.name], [], headers ];
                 
-                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"]`).nextElementSibling;
+                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
                 sectionContainer.querySelectorAll('.draggable-row').forEach(row => {
                     const rowData = [];
                     row.querySelectorAll('input').forEach(input => rowData.push(input.value));
@@ -475,7 +484,7 @@
                 const headers = section.columns.map(c => c.name);
                 csvContent += headers.join(',') + '\r\n';
 
-                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"]`).nextElementSibling;
+                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
                 sectionContainer.querySelectorAll('.draggable-row').forEach(row => {
                     const rowData = [];
                     row.querySelectorAll('input').forEach(input => rowData.push(`"${input.value.replace(/"/g, '""')}"`));
@@ -505,7 +514,7 @@
                 section.columns.forEach(c => html += `<th>${c.name}</th>`);
                 html += `</tr></thead><tbody>`;
 
-                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"]`).nextElementSibling;
+                const sectionContainer = document.querySelector(`#filler-sections-container [data-section-id="${sectionId}"] .data-rows-container`);
                 sectionContainer.querySelectorAll('.draggable-row').forEach(row => {
                     html += '<tr>';
                     row.querySelectorAll('input').forEach(input => html += `<td>${input.value}</td>`);
@@ -544,8 +553,3 @@
     </script>
 </body>
 </html>
-
-    </script>
-</body>
-</html>
-
